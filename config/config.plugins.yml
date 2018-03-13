@@ -1,0 +1,4 @@
+SerpenthornetGameAgentPlugin:
+  frame_handler: PLAY
+SerpenthornetGamePlugin:
+  fps: 2
