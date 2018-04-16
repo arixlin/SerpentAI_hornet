@@ -22,10 +22,11 @@ class SerpenthornetGame(Game, metaclass=Singleton):
         self.api_class = hornetAPI
         self.api_instance = None
 
-        self.frame_transformation_pipeline_string = "RESIZE:100x100|GRAYSCALE|FLOAT"
+        # self.frame_transformation_pipeline_string = "RESIZE:100x100|GRAYSCALE|FLOAT"
+        self.frame_transformation_pipeline_string = "RESIZE:100x100|JPG|FLOAT"
         self.frame_width = 100
         self.frame_height = 100
-        self.frame_channels = 0
+        # self.frame_channels = 3
 
     @property
     def screen_regions(self):

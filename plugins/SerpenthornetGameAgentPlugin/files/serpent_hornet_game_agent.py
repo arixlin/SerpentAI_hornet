@@ -104,12 +104,12 @@ class SerpenthornetGameAgent(GameAgent):
 
         self.dqn_movement = DDQN(
             model_file_path=movement_model_file_path if os.path.isfile(movement_model_file_path) else None,
-            input_shape=(100, 100, 4),
+            input_shape=(100, 100, 3),
             input_mapping=input_mapping,
             action_space=movement_action_space,
             replay_memory_size=5000,
             max_steps=1000000,
-            observe_steps=100,
+            observe_steps=10,
             batch_size=16,
             initial_epsilon=1,
             final_epsilon=0.01,
@@ -120,22 +120,22 @@ class SerpenthornetGameAgent(GameAgent):
 
         self.dqn_projectile = DDQN(
             model_file_path=projectile_model_file_path if os.path.isfile(projectile_model_file_path) else None,
-            input_shape=(100, 100, 4),
+            input_shape=(100, 100, 3),
             input_mapping=input_mapping,
             action_space=projectile_action_space,
             replay_memory_size=5000,
             max_steps=1000000,
-            observe_steps=100,
+            observe_steps=10,
             batch_size=16,
             initial_epsilon=1,
             final_epsilon=0.01,
             override_epsilon=False
         )
-        try:
-            self.dqn_projectile.load_model_weights(file_path='model/hornet/binding_of_isaac_projectile_dqn_150000_0.5687282200080599_.h5',override_epsilon=True)
-            self.dqn_movement.load_model_weights(file_path='model/hornet/binding_of_isacc_movement_dqn_150000_0.5687282200080599_.h5', override_epsilon=True)
-        except Exception as e:
-            raise e
+        # try:
+        #     self.dqn_projectile.load_model_weights(file_path='model/hornet/binding_of_isaac_projectile_dqn_150000_0.5687282200080599_.h5',override_epsilon=True)
+        #     self.dqn_movement.load_model_weights(file_path='model/hornet/binding_of_isacc_movement_dqn_150000_0.5687282200080599_.h5', override_epsilon=True)
+        # except Exception as e:
+        #     raise e
 
     def get_reward_state(self, heart, score):
         try:
@@ -208,29 +208,31 @@ class SerpenthornetGameAgent(GameAgent):
                 dtype="float64"
             ).frames[0]
             print(np.shape(pipline_game_frame.frame))
-            self.dqn_movement.build_frame_stack(pipline_game_frame.frame)
+            # self.dqn_movement.build_frame_stack(pipline_game_frame.frame)
+
+            self.dqn_movement.frame_stack = self._build_frame_stack(pipline_game_frame.frame)
             self.dqn_projectile.frame_stack = self.dqn_movement.frame_stack
 
         else:
             game_frame_buffer = FrameGrabber.get_frames(
-                [0, 4, 8, 12],
+                # [0, 4, 8, 12],
+                [0],
                 frame_shape=(self.game.frame_height, self.game.frame_width),
                 frame_type="PIPELINE",
                 dtype="float64"
             )
 
-            # print(self.dqn_movement.mode)
             if self.dqn_movement.mode == "TRAIN":
                 self.game_state["run_reward_movement"] += self.reward
                 self.game_state["run_reward_projectile"] += self.reward
 
-                self.dqn_movement.append_to_replay_memory(
+                self._movement_append_to_replay_memory(
                     game_frame_buffer,
                     self.reward,
                     terminal=self.game_over
                 )
 
-                self.dqn_projectile.append_to_replay_memory(
+                self._projectile_append_to_replay_memory(
                     game_frame_buffer,
                     self.reward,
                     terminal=self.game_over
@@ -257,8 +259,9 @@ class SerpenthornetGameAgent(GameAgent):
                     )
 
             elif self.dqn_movement.mode == "RUN":
-                self.dqn_movement.update_frame_stack(game_frame_buffer)
-                self.dqn_projectile.update_frame_stack(game_frame_buffer)
+                game_frames = [game_frame.frame for game_frame in game_frame_buffer.frames]
+                self.dqn_movement.frame_stack = np.array(game_frames)
+                self.dqn_projectile.frame_stack = np.array(game_frames)
 
             run_time = datetime.now() - self.started_at
             serpent.utilities.clear_terminal()
@@ -403,3 +406,38 @@ class SerpenthornetGameAgent(GameAgent):
                                            lang='chi_sim',
                                            boxes=False,
                                            config='--psm 10 --eom 3 -c tessedit_char_whitelist=0123456789')
+
+
+    def _build_frame_stack(self, game_frame):
+        frame_stack = np.stack((
+            game_frame
+        ), axis=0)
+        return frame_stack.reshape((1,) + frame_stack.shape)
+
+    def _movement_append_to_replay_memory(self, game_frame_buffer, reward, terminal=False):
+        game_frames = [game_frame.frame for game_frame in game_frame_buffer.frames]
+        previous_frame_stack = self.dqn_movement.frame_stack
+        self.dqn_movement.frame_stack = np.array(game_frames)
+
+        observation = [
+            previous_frame_stack,
+            self.dqn_movement.current_action_index,
+            reward,
+            self.dqn_movement.frame_stack,
+            terminal
+        ]
+        self.dqn_movement.replay_memory.add(self.dqn_movement.calculate_target_error(observation), observation)
+
+    def _projectile_append_to_replay_memory(self, game_frame_buffer, reward, terminal=False):
+        game_frames = [game_frame.frame for game_frame in game_frame_buffer.frames]
+        previous_frame_stack = self.dqn_projectile.frame_stack
+        self.dqn_projectile.frame_stack = np.array(game_frames)
+
+        observation = [
+            previous_frame_stack,
+            self.dqn_projectile.current_action_index,
+            reward,
+            self.dqn_projectile.frame_stack,
+            terminal
+        ]
+        self.dqn_projectile.replay_memory.add(self.dqn_projectile.calculate_target_error(observation), observation)
