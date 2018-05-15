@@ -6,6 +6,7 @@
 * install game Golden Hornet
 
 ## Start
+* cd SerpentAI_hornet
 * serpent launch hornet
 * choice game: START->ARCADE->START ARCADE
 * serpent play hornet SerpenthornetGameAgent
